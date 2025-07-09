@@ -281,28 +281,49 @@ void WallpaperWindow::renderWallpaper() {
     QPainter painter(device);
     painter.fillRect(rect, Qt::black);
 
+    // Draw image scaled to fill the window while preserving aspect ratio (crop excess)
+    auto drawImagePreserveAspectCrop = [&](const QImage &img, qreal opacity = 1.0) {
+        if (img.isNull())
+            return;
+
+        QSize targetSize = rect.size();
+        QSize sourceSize = img.size();
+
+        qreal scale = qMax(
+            qreal(targetSize.width()) / sourceSize.width(),
+                           qreal(targetSize.height()) / sourceSize.height()
+        );
+
+        QSize scaledSize = sourceSize * scale;
+
+        QRectF targetRect(
+            rect.x() + (rect.width() - scaledSize.width()) / 2.0,
+                          rect.y() + (rect.height() - scaledSize.height()) / 2.0,
+                          scaledSize.width(),
+                          scaledSize.height()
+        );
+
+        painter.setOpacity(opacity);
+        painter.drawImage(targetRect, img);
+        painter.setOpacity(1.0);
+    };
+
     if (m_inTransition) {
         TransitionEvent te = m_events[m_currentEventIndex].data.value<TransitionEvent>();
         double progress = double(m_elapsedInEvent) / te.duration;
         progress = qBound(0.0, progress, 1.0);
 
-        if (!m_transitionFromImage.isNull())
-            painter.drawImage(rect, m_transitionFromImage);
-
-        if (!m_transitionToImage.isNull()) {
-            painter.setOpacity(progress);
-            painter.drawImage(rect, m_transitionToImage);
-            painter.setOpacity(1.0);
-        }
+        drawImagePreserveAspectCrop(m_transitionFromImage, 1.0);
+        drawImagePreserveAspectCrop(m_transitionToImage, progress);
     } else {
-        if (!m_currentStaticImage.isNull())
-            painter.drawImage(rect, m_currentStaticImage);
+        drawImagePreserveAspectCrop(m_currentStaticImage);
     }
 
     painter.end();
     m_backingStore->endPaint();
     m_backingStore->flush(rect);
 }
+
 
 void WallpaperWindow::exposeEvent(QExposeEvent *event) {
     Q_UNUSED(event);
